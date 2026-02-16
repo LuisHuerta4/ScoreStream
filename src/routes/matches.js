@@ -1,8 +1,8 @@
 import { Router } from 'express';
-import { createMatchSchema, listMatchesQuerySchema } from '../validation/matches';
+import { createMatchSchema, listMatchesQuerySchema } from '../validation/matches.js';
 import { matches } from '../db/schema.js';
 import { db } from '../db/db.js';
-import { getMatchStatus } from '../utils/matchUtils.js';
+import { getMatchStatus } from '../utils/match.status.js';
 import { desc } from 'drizzle-orm';
 
 export const matchesRouter = Router();
@@ -49,6 +49,10 @@ matchesRouter.post('/', async (req, res) => {
             awayScore: awayScore ?? 0,
             status: getMatchStatus(startTime, endTime),
         }).returning(); // Return the inserted record with the generated ID
+
+        if (res.app.locals.broadcastMatchCreated) {
+            res.app.locals.broadcastMatchCreated(event);
+        }
 
         res.status(201).json({ message: 'Match created successfully', data: event });
     } catch (e) {
