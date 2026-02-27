@@ -10,7 +10,7 @@ export function ScoreBoard({ match }: Props) {
     <div className="px-6 py-5 border-b border-gray-200 bg-white">
       <div className="flex items-center gap-2 mb-4">
         <span className="text-xs font-medium text-gray-400 uppercase tracking-wider">
-          {match.sport}
+          {match.sport}{match.league ? ` · ${match.league}` : ''}
         </span>
         <StatusBadge status={match.status} />
       </div>

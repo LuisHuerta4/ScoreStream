@@ -18,7 +18,7 @@ export function MatchListItem({ match, selected, onSelect }: Props) {
     >
       <div className="flex items-center justify-between mb-1">
         <span className="text-xs font-medium text-gray-400 uppercase tracking-wider">
-          {match.sport}
+          {match.sport}{match.league ? ` · ${match.league}` : ''}
         </span>
         <StatusBadge status={match.status} />
       </div>
