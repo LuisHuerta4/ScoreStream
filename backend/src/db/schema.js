@@ -21,7 +21,7 @@ export const commentary = pgTable('commentary', {
     id: serial('id').primaryKey(),
     matchId: integer('match_id')
         .notNull()
-        .references(() => matches.id),
+        .references(() => matches.id, { onDelete: 'cascade' }),
     minute: integer('minute'),
     sequence: integer('sequence'),
     period: text('period'),

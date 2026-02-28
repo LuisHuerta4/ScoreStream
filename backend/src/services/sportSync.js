@@ -256,8 +256,8 @@ async function upsertMatch(event, { broadcastMatchCreated, broadcastCommentary }
 // Orchestrator
 
 async function syncAll(broadcasts) {
-    // Build the last 3 calendar dates in UTC (today, yesterday, 2 days ago)
-    const dates = [0, 1, 2].map((offset) => {
+    // Build the last 2 calendar dates in UTC (today, yesterday) — matches the 2-day deletion window
+    const dates = [0, 1].map((offset) => {
         const d = new Date(Date.now() - offset * 24 * 60 * 60 * 1000);
         return d.toISOString().slice(0, 10);
     });

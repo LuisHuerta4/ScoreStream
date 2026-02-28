@@ -5,6 +5,7 @@ import { attachWebSocketServer } from './ws/server.js';
 import { securityMiddleware } from './arcjet.js';
 import { commentaryRouter } from './routes/commentary.js';
 import { startSportSync } from './services/sportSync.js';
+import { startCleanupJob } from './services/cleanupJob.js';
 
 const PORT = Number(process.env.PORT) || 8000;
 const HOST = process.env.HOST || '0.0.0.0';
@@ -28,6 +29,7 @@ app.locals.broadcastMatchCreated = broadcastMatchCreated;
 app.locals.broadcastCommentary = broadcastCommentary;
 
 startSportSync({ broadcastMatchCreated, broadcastCommentary });
+startCleanupJob();
 
 server.listen(PORT, HOST, () => {
     const baseUrl = HOST === '0.0.0.0' ? `http://localhost:${PORT}` : `http://${HOST}:${PORT}`;
