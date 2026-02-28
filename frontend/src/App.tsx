@@ -42,28 +42,25 @@ export default function App() {
   return (
     <div className="min-h-screen bg-[#F0EFEB]">
 
-      {/* ── Hero ─────────────────────────────────────────────────── */}
+      {/* Hero */}
       <header className="bg-black text-white px-6 sm:px-10 py-14 sm:py-20 border-b-[4px] border-black">
         <div className="max-w-7xl mx-auto">
-          {/* Live indicator */}
+
           <div className="flex items-center gap-2.5 mb-5">
             <span className="w-2.5 h-2.5 rounded-full bg-[#4ADE80] animate-pulse" />
             <span className="text-xs font-black uppercase tracking-[0.35em] text-[#4ADE80]">
-              Real-time Sports
+              Live Football
             </span>
           </div>
 
-          {/* Wordmark */}
           <h1 className="text-6xl sm:text-8xl lg:text-9xl font-black uppercase leading-none tracking-tight">
             Score<span className="text-[#FAFF00]">Stream</span>
           </h1>
 
-          {/* Tagline */}
           <p className="mt-5 text-sm sm:text-base font-bold uppercase tracking-[0.2em] text-gray-400">
             Live scores &amp; commentary — no refresh needed
           </p>
 
-          {/* Stats bar */}
           <div className="mt-8 flex flex-wrap gap-4">
             {counts.live > 0 && (
               <div className="inline-flex items-center gap-2 px-4 py-2 bg-[#4ADE80] border-2 border-[#4ADE80]">
@@ -82,7 +79,7 @@ export default function App() {
         </div>
       </header>
 
-      {/* ── Tabs ─────────────────────────────────────────────────── */}
+      {/* Tabs */}
       <div className="sticky top-0 z-30 bg-[#F0EFEB] border-b-[3px] border-black">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex overflow-x-auto [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
@@ -112,7 +109,7 @@ export default function App() {
         </div>
       </div>
 
-      {/* ── Main content (grid + panel) ───────────────────────────── */}
+      {/* Main content (grid + panel) */}
       <div className={`transition-all duration-300 ${commentaryMatch ? 'lg:mr-[440px]' : ''}`}>
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
 
@@ -128,7 +125,6 @@ export default function App() {
             </div>
           )}
 
-          {/* Error */}
           {!loading && error && (
             <div className="border-[3px] border-black bg-white p-8 shadow-[6px_6px_0px_#000] max-w-md">
               <p className="text-xs font-black uppercase tracking-widest text-[#FF3B30] mb-2">
@@ -164,7 +160,7 @@ export default function App() {
         </div>
       </div>
 
-      {/* ── Mobile/tablet backdrop ────────────────────────────────── */}
+      {/* Mobile/tablet backdrop */}
       {commentaryMatch && (
         <div
           className="fixed inset-0 bg-black/60 z-40 lg:hidden"
@@ -172,7 +168,7 @@ export default function App() {
         />
       )}
 
-      {/* ── Commentary panel ─────────────────────────────────────── */}
+      {/* Commentary panel */}
       {commentaryMatch && (
         <CommentaryPanel
           match={commentaryMatch}

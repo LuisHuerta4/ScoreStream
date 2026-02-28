@@ -2,89 +2,98 @@ import { db } from '../db/db.js';
 import { matches, commentary } from '../db/schema.js';
 import { eq } from 'drizzle-orm';
 
-const BASE_URL = 'https://www.thesportsdb.com/api/v1/json/123';
-const POLL_INTERVAL_MS = 60_000;
-const SPORTS = ['Soccer', 'Basketball', 'Ice Hockey'];
+const BASE_URL = 'https://v3.football.api-sports.io';
+const POLL_INTERVAL_MS = 20 * 60 * 1000; // 20 minutes — keeps usage ~92 requests/day on free tier
 
-// Estimated match durations in ms per sport
-const DURATION_MS = {
-    Soccer: 2 * 60 * 60 * 1000,
-    Basketball: 2.5 * 60 * 60 * 1000,
-    'Ice Hockey': 2 * 60 * 60 * 1000,
-};
+// Tracked league IDs (API-Football)
+// 39=Premier League, 140=La Liga, 78=Bundesliga, 135=Serie A, 61=Ligue 1, 2=UCL, 3=UEL
+const LEAGUE_IDS = new Set([39, 140, 78, 135, 61, 2, 3]);
 
-// In-Memory State
+const LIVE_STATUSES = new Set(['1H', 'HT', '2H', 'ET', 'P', 'BT', 'LIVE', 'INT']);
+const FINISH_STATUSES = new Set(['FT', 'AET', 'PEN', 'CANC', 'ABD', 'AWD', 'WO']);
 
-// Map<externalId, { matchId, homeScore, awayScore, status, homeTeam, awayTeam }>
+// Map<externalId_string, { matchId, status, homeScore, awayScore, homeTeam, awayTeam, processedEventKeys: Set<string> }>
 const syncState = new Map();
 
-// Status Mapping
-
-function mapStatus(strStatus, startTime) {
-    if (!strStatus) return deriveStatusFromTime(startTime);
-
-    const s = strStatus.trim().toLowerCase();
-
-    if (s === 'match finished' || s === 'ft' || s === 'aet' || s === 'pen') {
-        return 'finished';
+// API helper
+async function apiFetch(path) {
+    const key = process.env.API_FOOTBALL_KEY;
+    if (!key || key === 'your_api_football_key_here') {
+        throw new Error('API_FOOTBALL_KEY is not set in .env');
     }
-
-    if (s === '1h' || s === 'ht' || s === '2h' || s === 'et' || s === 'p' || s === 'bt') {
-        return 'live';
-    }
-
-    return deriveStatusFromTime(startTime);
+    const res = await fetch(`${BASE_URL}${path}`, {
+        headers: { 'x-apisports-key': key },
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status} for ${BASE_URL}${path}`);
+    const body = await res.json();
+    return body.response ?? [];
 }
 
-function deriveStatusFromTime(startTime) {
-    if (!startTime) return 'scheduled';
-    return Date.now() < startTime.getTime() ? 'scheduled' : 'live';
+// Status mapping
+function mapStatus(shortStatus) {
+    if (LIVE_STATUSES.has(shortStatus)) return 'live';
+    if (FINISH_STATUSES.has(shortStatus)) return 'finished';
+    return 'scheduled';
 }
 
-// Time Helpers
+// Event deduplication key
 
-function buildStartTime(dateEvent, strTime) {
-    if (!dateEvent) return null;
-    const time = (strTime && strTime !== '00:00:00') ? strTime : '00:00:00';
-    const d = new Date(`${dateEvent}T${time}Z`);
-    return Number.isNaN(d.getTime()) ? null : d;
+function buildEventKey(minute, eventType, actor) {
+    return `${minute ?? 0}_${eventType ?? ''}_${(actor ?? '').toLowerCase().replace(/\s+/g, '_')}`;
 }
 
-function buildEndTime(startTime, sport) {
-    if (!startTime) return null;
-    return new Date(startTime.getTime() + (DURATION_MS[sport] ?? DURATION_MS['Soccer']));
-}
+// Event -> commentary mapping
+function mapEvent(event) {
+    const minute = event.time?.elapsed ?? null;
+    const playerName = event.player?.name ?? null;
+    const teamName = event.team?.name ?? null;
+    const type = event.type;
+    const detail = event.detail ?? '';
 
-// Score Normalisation
-
-function parseScore(raw) {
-    if (raw === null || raw === undefined || raw === '') return 0;
-    const n = parseInt(raw, 10);
-    return Number.isNaN(n) ? 0 : n;
-}
-
-// API Fetch
-
-async function fetchEventsForDate(sport, dateString) {
-    const sportParam = encodeURIComponent(sport).replace(/%20/g, '+');
-    const url = `${BASE_URL}/eventsday.php?d=${dateString}&s=${sportParam}`;
-
-    try {
-        const response = await fetch(url);
-        if (!response.ok) {
-            console.error(`[SportSync] HTTP ${response.status} fetching ${sport} for ${dateString}`);
-            return [];
+    if (type === 'Goal') {
+        if (detail === 'Own Goal') {
+            return {
+                minute, eventType: 'own_goal', actor: playerName, team: teamName,
+                message: `OWN GOAL! ${playerName} puts it into their own net! (${teamName})`,
+            };
         }
-        const body = await response.json();
-        return Array.isArray(body?.events) ? body.events : [];
-    } catch (err) {
-        console.error(`[SportSync] Failed to fetch ${sport} events:`, err.message);
-        return [];
+        const isPen = detail === 'Penalty';
+        return {
+            minute, eventType: isPen ? 'penalty' : 'goal', actor: playerName, team: teamName,
+            message: `GOAL! ${playerName} scores for ${teamName}!${isPen ? ' (Penalty)' : ''}`,
+        };
     }
+
+    if (type === 'Card') {
+        const isRed = detail === 'Red Card' || detail === 'Yellow Red Card';
+        return {
+            minute, eventType: isRed ? 'red_card' : 'yellow_card', actor: playerName, team: teamName,
+            message: isRed
+                ? `RED CARD! ${playerName} is sent off! (${teamName})`
+                : `Yellow card shown to ${playerName} (${teamName})`,
+        };
+    }
+
+    if (type === 'subst') {
+        const playerOff = event.player?.name ?? null;
+        const playerOn = event.assist?.name ?? null;
+        return {
+            minute, eventType: 'substitution', actor: playerOn, team: teamName,
+            message: `Substitution: ${playerOn} comes on for ${playerOff} (${teamName})`,
+        };
+    }
+
+    if (type === 'Var') {
+        return {
+            minute, eventType: 'var', actor: null, team: teamName,
+            message: `VAR: ${detail}`,
+        };
+    }
+
+    return null;
 }
 
-// Commentary Insertion
-
+// Commentary insertion
 async function insertCommentary(matchId, fields, broadcastCommentary) {
     try {
         const [row] = await db.insert(commentary).values({
@@ -96,198 +105,170 @@ async function insertCommentary(matchId, fields, broadcastCommentary) {
             period: fields.period ?? null,
             message: fields.message,
         }).returning();
-
         broadcastCommentary(matchId, row);
     } catch (err) {
-        console.error(`[SportSync] Failed to insert commentary for match ${matchId}:`, err.message);
+        console.error(`[SoccerSync] Failed to insert commentary for match ${matchId}:`, err.message);
     }
 }
 
-// Core Upsert Logic
+// Load syncState from DB (restores state after server restart)
+async function loadStateFromDb(externalId) {
+    const [row] = await db.select().from(matches)
+        .where(eq(matches.externalId, externalId)).limit(1);
+    if (!row) return null;
 
-async function upsertMatch(event, { broadcastMatchCreated, broadcastCommentary }) {
-    if (event.strPostponed === 'yes') return;
-
-    const externalId = String(event.idEvent);
-    const sport = event.strSport ?? 'Soccer';
-    const startTime = buildStartTime(event.dateEvent, event.strTime);
-    const endTime = buildEndTime(startTime, sport);
-    const newHomeScore = parseScore(event.intHomeScore);
-    const newAwayScore = parseScore(event.intAwayScore);
-    const newStatus = mapStatus(event.strStatus, startTime);
-
-    // Check if match already exists
     const existing = await db
-        .select()
-        .from(matches)
-        .where(eq(matches.externalId, externalId))
-        .limit(1);
+        .select({ minute: commentary.minute, eventType: commentary.eventType, actor: commentary.actor })
+        .from(commentary)
+        .where(eq(commentary.matchId, row.id));
 
-    if (existing.length === 0) {
-        // INSERT new match
+    return {
+        matchId: row.id,
+        status: row.status,
+        homeScore: row.homeScore,
+        awayScore: row.awayScore,
+        homeTeam: row.homeTeam,
+        awayTeam: row.awayTeam,
+        processedEventKeys: new Set(existing.map(c => buildEventKey(c.minute, c.eventType, c.actor))),
+    };
+}
+
+// Fetch and insert new events for a fixture
+async function processEvents(externalId, matchId, broadcastCommentary) {
+    const state = syncState.get(externalId);
+    if (!state) return;
+
+    const events = await apiFetch(`/fixtures/events?fixture=${externalId}`);
+
+    for (const event of events) {
+        const mapped = mapEvent(event);
+        if (!mapped) continue;
+        const key = buildEventKey(mapped.minute, mapped.eventType, mapped.actor);
+        if (state.processedEventKeys.has(key)) continue;
+
+        await insertCommentary(matchId, mapped, broadcastCommentary);
+        state.processedEventKeys.add(key);
+    }
+}
+
+// Core fixture upsert
+async function processFixture(fixture, broadcasts) {
+    const externalId = String(fixture.fixture.id);
+    const shortStatus = fixture.fixture.status.short;
+    const newStatus = mapStatus(shortStatus);
+    const newHome = fixture.goals.home ?? 0;
+    const newAway = fixture.goals.away ?? 0;
+    const startTime = fixture.fixture.date ? new Date(fixture.fixture.date) : null;
+    const homeTeam = fixture.teams.home.name;
+    const awayTeam = fixture.teams.away.name;
+    const league = fixture.league.name;
+
+    let state = syncState.get(externalId) ?? await loadStateFromDb(externalId);
+
+    if (!state) {
+        // New match — INSERT
         try {
             const [inserted] = await db.insert(matches).values({
                 externalId,
-                sport,
-                league: event.strLeague ?? null,
-                homeTeam: event.strHomeTeam,
-                awayTeam: event.strAwayTeam,
+                sport: 'Soccer',
+                league,
+                homeTeam,
+                awayTeam,
                 status: newStatus,
                 startTime,
-                endTime,
-                homeScore: newHomeScore,
-                awayScore: newAwayScore,
+                endTime: startTime ? new Date(startTime.getTime() + 2 * 60 * 60 * 1000) : null,
+                homeScore: newHome,
+                awayScore: newAway,
             }).returning();
 
-            broadcastMatchCreated(inserted);
+            broadcasts.broadcastMatchCreated(inserted);
 
-            syncState.set(externalId, {
+            state = {
                 matchId: inserted.id,
-                homeScore: newHomeScore,
-                awayScore: newAwayScore,
                 status: newStatus,
-                homeTeam: inserted.homeTeam,
-                awayTeam: inserted.awayTeam,
-            });
+                homeScore: newHome,
+                awayScore: newAway,
+                homeTeam,
+                awayTeam,
+                processedEventKeys: new Set(),
+            };
+            syncState.set(externalId, state);
 
             if (newStatus === 'live') {
-                await insertCommentary(inserted.id, {
-                    eventType: 'status_change',
-                    message: 'Match kicked off',
-                    period: '1H',
-                }, broadcastCommentary);
+                await insertCommentary(inserted.id, { eventType: 'status_change', message: 'Kick off!' }, broadcasts.broadcastCommentary);
+                await processEvents(externalId, inserted.id, broadcasts.broadcastCommentary);
             }
         } catch (err) {
-            // 23505 = unique_violation — concurrent poll already inserted this row
             if (err.code !== '23505') {
-                console.error(`[SportSync] Failed to insert match ${externalId}:`, err.message);
+                console.error(`[SoccerSync] Failed to insert fixture ${externalId}:`, err.message);
             }
         }
         return;
     }
 
-    // UPDATE existing match
-    const row = existing[0];
-    const matchId = row.id;
+    const statusChanged = newStatus !== state.status;
+    const scoreChanged = newHome !== state.homeScore || newAway !== state.awayScore;
 
-    const prior = syncState.get(externalId) ?? {
-        matchId,
-        homeScore: row.homeScore,
-        awayScore: row.awayScore,
-        status: row.status,
-        homeTeam: row.homeTeam,
-        awayTeam: row.awayTeam,
-    };
-
-    const scoreChanged = newHomeScore !== prior.homeScore || newAwayScore !== prior.awayScore;
-    const statusChanged = newStatus !== prior.status;
-
-    if (!scoreChanged && !statusChanged) {
-        syncState.set(externalId, { ...prior });
+    if (!statusChanged && !scoreChanged) {
+        syncState.set(externalId, state);
         return;
     }
 
-    // Write updates to DB
+    // UPDATE match
     try {
-        await db.update(matches).set({
-            homeScore: newHomeScore,
-            awayScore: newAwayScore,
-            status: newStatus,
-            ...(startTime ? { startTime } : {}),
-            ...(endTime ? { endTime } : {}),
-        }).where(eq(matches.id, matchId));
+        await db.update(matches)
+            .set({ status: newStatus, homeScore: newHome, awayScore: newAway })
+            .where(eq(matches.id, state.matchId));
     } catch (err) {
-        console.error(`[SportSync] Failed to update match ${matchId}:`, err.message);
+        console.error(`[SoccerSync] Failed to update fixture ${externalId}:`, err.message);
         return;
     }
 
-    syncState.set(externalId, {
-        matchId,
-        homeScore: newHomeScore,
-        awayScore: newAwayScore,
-        status: newStatus,
-        homeTeam: prior.homeTeam,
-        awayTeam: prior.awayTeam,
-    });
+    syncState.set(externalId, { ...state, status: newStatus, homeScore: newHome, awayScore: newAway });
 
-    // Status transition commentary
+    // Status-transition commentary
     if (statusChanged) {
-        if (prior.status === 'scheduled' && newStatus === 'live') {
-            await insertCommentary(matchId, {
+        if (state.status === 'scheduled' && newStatus === 'live') {
+            await insertCommentary(state.matchId, { eventType: 'status_change', message: 'Kick off!' }, broadcasts.broadcastCommentary);
+        } else if (state.status !== 'finished' && newStatus === 'finished') {
+            await insertCommentary(state.matchId, {
                 eventType: 'status_change',
-                message: 'Match kicked off',
-                period: '1H',
-            }, broadcastCommentary);
-        } else if (prior.status !== 'finished' && newStatus === 'finished') {
-            await insertCommentary(matchId, {
-                eventType: 'status_change',
-                message: `Full time! Final score: ${prior.homeTeam} ${newHomeScore} - ${newAwayScore} ${prior.awayTeam}`,
-            }, broadcastCommentary);
+                message: `Full time! ${homeTeam} ${newHome} - ${newAway} ${awayTeam}`,
+            }, broadcasts.broadcastCommentary);
         }
     }
 
-    // Score change commentary
-    if (scoreChanged) {
-        const homeDelta = newHomeScore - prior.homeScore;
-        const awayDelta = newAwayScore - prior.awayScore;
-
-        for (let i = 1; i <= homeDelta; i++) {
-            const h = prior.homeScore + i;
-            const a = prior.awayScore;
-            await insertCommentary(matchId, {
-                eventType: 'goal',
-                team: prior.homeTeam,
-                message: `GOAL! ${prior.homeTeam} score! It's now ${prior.homeTeam} ${h} - ${a} ${prior.awayTeam}`,
-            }, broadcastCommentary);
-        }
-
-        for (let i = 1; i <= awayDelta; i++) {
-            const h = newHomeScore;
-            const a = prior.awayScore + i;
-            await insertCommentary(matchId, {
-                eventType: 'goal',
-                team: prior.awayTeam,
-                message: `GOAL! ${prior.awayTeam} score! It's now ${prior.homeTeam} ${h} - ${a} ${prior.awayTeam}`,
-            }, broadcastCommentary);
-        }
-    }
+    // Fetch new events when something changed (deduplication prevents re-insertion)
+    await processEvents(externalId, state.matchId, broadcasts.broadcastCommentary);
 }
 
 // Orchestrator
-
 async function syncAll(broadcasts) {
-    // Build the last 2 calendar dates in UTC (today, yesterday) — matches the 2-day deletion window
-    const dates = [0, 1].map((offset) => {
-        const d = new Date(Date.now() - offset * 24 * 60 * 60 * 1000);
-        return d.toISOString().slice(0, 10);
-    });
+    const today = new Date().toISOString().slice(0, 10);
+    const fixtures = await apiFetch(`/fixtures?date=${today}`); // 1 API request per poll
 
-    for (const date of dates) {
-        for (const sport of SPORTS) {
-            const events = await fetchEventsForDate(sport, date);
-            for (const event of events) {
-                await upsertMatch(event, broadcasts).catch((err) => {
-                    console.error(`[SportSync] Unhandled error for event ${event.idEvent}:`, err.message);
-                });
-            }
-        }
+    for (const fixture of fixtures) {
+        if (!LEAGUE_IDS.has(fixture.league.id)) continue; // only tracked leagues
+        await processFixture(fixture, broadcasts).catch((err) =>
+            console.error(`[SoccerSync] Unhandled error for fixture ${fixture.fixture.id}:`, err.message)
+        );
     }
 }
 
-// Public Export
-
+// Public export
 export function startSportSync({ broadcastMatchCreated, broadcastCommentary }) {
     const broadcasts = { broadcastMatchCreated, broadcastCommentary };
 
-    console.log('[SportSync] Starting sport sync service…');
+    console.log('[SoccerSync] Starting soccer sync service (polls every 20 min)...');
 
-    syncAll(broadcasts).catch((err) => {
-        console.error('[SportSync] Initial sync failed:', err.message);
-    });
+    syncAll(broadcasts).catch((err) =>
+        console.error('[SoccerSync] Initial sync failed:', err.message)
+    );
 
-    setInterval(() => {
-        syncAll(broadcasts).catch((err) => {
-            console.error('[SportSync] Scheduled sync failed:', err.message);
-        });
-    }, POLL_INTERVAL_MS);
+    setInterval(() =>
+        syncAll(broadcasts).catch((err) =>
+            console.error('[SoccerSync] Scheduled sync failed:', err.message)
+        ),
+        POLL_INTERVAL_MS
+    );
 }
