@@ -4,58 +4,60 @@ interface Props {
   entry: Commentary;
 }
 
-const eventColors: Record<string, string> = {
-  goal: 'bg-green-100 text-green-700',
-  yellow_card: 'bg-yellow-100 text-yellow-700',
-  red_card: 'bg-red-100 text-red-700',
-  substitution: 'bg-blue-100 text-blue-700',
-  penalty: 'bg-orange-100 text-orange-700',
-  kickoff: 'bg-slate-100 text-slate-600',
-  halftime: 'bg-slate-100 text-slate-600',
-  fulltime: 'bg-slate-100 text-slate-600',
+const eventConfig: Record<string, { bg: string; label: string }> = {
+  goal:         { bg: 'bg-[#4ADE80]', label: 'GOAL' },
+  yellow_card:  { bg: 'bg-[#FAFF00]', label: 'YELLOW' },
+  red_card:     { bg: 'bg-[#FF3B30] text-white', label: 'RED' },
+  substitution: { bg: 'bg-[#A5F3FC]', label: 'SUB' },
+  penalty:      { bg: 'bg-[#FB923C]', label: 'PEN' },
+  kickoff:      { bg: 'bg-[#E5E7EB]', label: 'KO' },
+  halftime:     { bg: 'bg-[#E5E7EB]', label: 'HT' },
+  fulltime:     { bg: 'bg-[#E5E7EB]', label: 'FT' },
 };
 
-function eventChipClass(eventType: string | null): string {
-  if (!eventType) return 'bg-gray-100 text-gray-500';
-  return eventColors[eventType.toLowerCase()] ?? 'bg-gray-100 text-gray-500';
-}
-
-function formatEventType(eventType: string): string {
-  return eventType.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+function getEventConfig(eventType: string | null) {
+  if (!eventType) return null;
+  return eventConfig[eventType.toLowerCase()] ?? { bg: 'bg-[#E5E7EB]', label: eventType.toUpperCase() };
 }
 
 export function CommentaryItem({ entry }: Props) {
+  const evConf = getEventConfig(entry.eventType);
+
   return (
-    <div className="flex gap-3 px-5 py-3 border-b border-gray-100 hover:bg-gray-50 transition-colors">
-      {/* Minute */}
-      <div className="w-10 shrink-0 text-right">
+    <div className="flex gap-3 px-4 py-3 border-b-2 border-black last:border-b-0 hover:bg-[#FAFF00]/20 transition-colors">
+      {/* Minute bubble */}
+      <div className="w-10 shrink-0 flex flex-col items-center pt-0.5">
         {entry.minute !== null ? (
-          <span className="text-xs font-bold text-gray-400 tabular-nums">
+          <span className="inline-flex items-center justify-center w-9 h-9 border-2 border-black bg-black text-white font-black text-xs tabular-nums">
             {entry.minute}'
           </span>
         ) : (
-          <span className="text-xs text-gray-300">—</span>
+          <span className="inline-flex items-center justify-center w-9 h-9 border-2 border-black bg-[#E5E7EB] text-gray-400 font-black text-xs">
+            —
+          </span>
         )}
       </div>
 
       {/* Content */}
-      <div className="flex-1 min-w-0">
-        <div className="flex flex-wrap items-center gap-1.5 mb-0.5">
-          {entry.eventType && (
-            <span
-              className={`text-xs font-semibold px-1.5 py-0.5 rounded ${eventChipClass(entry.eventType)}`}
-            >
-              {formatEventType(entry.eventType)}
+      <div className="flex-1 min-w-0 pt-1">
+        <div className="flex flex-wrap items-center gap-1.5 mb-1">
+          {evConf && (
+            <span className={`inline-block px-2 py-0.5 border-2 border-black font-black text-xs uppercase tracking-wider ${evConf.bg}`}>
+              {evConf.label}
             </span>
           )}
           {entry.actor && (
-            <span className="text-xs font-medium text-gray-600">{entry.actor}</span>
+            <span className="text-xs font-black text-gray-800 uppercase tracking-wide">
+              {entry.actor}
+            </span>
           )}
           {entry.team && (
-            <span className="text-xs text-gray-400">({entry.team})</span>
+            <span className="text-xs font-bold text-gray-400 uppercase">
+              ({entry.team})
+            </span>
           )}
         </div>
-        <p className="text-sm text-gray-700 leading-snug">{entry.message}</p>
+        <p className="text-sm font-bold text-gray-800 leading-snug">{entry.message}</p>
       </div>
     </div>
   );
