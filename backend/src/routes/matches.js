@@ -3,7 +3,7 @@ import { createMatchSchema, listMatchesQuerySchema } from '../validation/matches
 import { matches } from '../db/schema.js';
 import { db } from '../db/db.js';
 import { getMatchStatus } from '../utils/match.status.js';
-import { desc } from 'drizzle-orm';
+import { desc, gte, or, isNull } from 'drizzle-orm';
 
 export const matchesRouter = Router();
 
@@ -19,10 +19,13 @@ matchesRouter.get('/', async (req, res) => {
     const limit = Math.min(parsed.data.limit ?? 50, MAX_LIMIT); // Default to 50 if not provided, max 100
 
     try {
+        const twoDaysAgo = new Date(Date.now() - 2 * 24 * 60 * 60 * 1000);
+
         const data = await db
             .select()
             .from(matches)
-            .orderBy((desc(matches.createdAt)))
+            .where(or(gte(matches.startTime, twoDaysAgo), isNull(matches.startTime)))
+            .orderBy(desc(matches.createdAt))
             .limit(limit);
 
         res.json({ data });

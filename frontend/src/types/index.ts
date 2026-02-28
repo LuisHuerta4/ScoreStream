@@ -3,6 +3,7 @@ export type MatchStatus = 'scheduled' | 'live' | 'finished';
 export interface Match {
   id: number;
   sport: string;
+  league: string | null;
   homeTeam: string;
   awayTeam: string;
   status: MatchStatus;
