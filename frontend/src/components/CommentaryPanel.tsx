@@ -18,7 +18,7 @@ export function CommentaryPanel({ match, onClose }: Props) {
       <div className="bg-black text-white px-5 py-4 flex items-start justify-between gap-3 shrink-0 border-b-[3px] border-black">
         <div className="flex-1 min-w-0">
           <p className="text-xs font-black uppercase tracking-[0.25em] text-[#FAFF00] mb-1">
-            {match.sport}{match.league ? ` · ${match.league}` : ''}
+            {match.league ?? 'Football'}
           </p>
           <div className="flex items-center gap-2 flex-wrap">
             <span className="text-sm font-black uppercase leading-tight text-white truncate">

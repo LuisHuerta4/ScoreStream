@@ -5,14 +5,17 @@ interface Props {
 }
 
 const eventConfig: Record<string, { bg: string; label: string }> = {
-  goal:         { bg: 'bg-[#4ADE80]', label: 'GOAL' },
-  yellow_card:  { bg: 'bg-[#FAFF00]', label: 'YELLOW' },
-  red_card:     { bg: 'bg-[#FF3B30] text-white', label: 'RED' },
-  substitution: { bg: 'bg-[#A5F3FC]', label: 'SUB' },
-  penalty:      { bg: 'bg-[#FB923C]', label: 'PEN' },
-  kickoff:      { bg: 'bg-[#E5E7EB]', label: 'KO' },
-  halftime:     { bg: 'bg-[#E5E7EB]', label: 'HT' },
-  fulltime:     { bg: 'bg-[#E5E7EB]', label: 'FT' },
+  goal:          { bg: 'bg-[#4ADE80]', label: 'GOAL' },
+  own_goal:      { bg: 'bg-[#FF3B30]', label: 'OWN GOAL' },
+  yellow_card:   { bg: 'bg-[#FAFF00]', label: 'YELLOW' },
+  red_card:      { bg: 'bg-[#FF3B30]', label: 'RED' },
+  substitution:  { bg: 'bg-[#A5F3FC]', label: 'SUB' },
+  penalty:       { bg: 'bg-[#FB923C]', label: 'PEN' },
+  var:           { bg: 'bg-[#E5E7EB]', label: 'VAR' },
+  status_change: { bg: 'bg-[#E5E7EB]', label: 'INFO' },
+  kickoff:       { bg: 'bg-[#E5E7EB]', label: 'KO' },
+  halftime:      { bg: 'bg-[#E5E7EB]', label: 'HT' },
+  fulltime:      { bg: 'bg-[#E5E7EB]', label: 'FT' },
 };
 
 function getEventConfig(eventType: string | null) {
