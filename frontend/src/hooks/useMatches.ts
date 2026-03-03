@@ -22,6 +22,9 @@ export function useMatches() {
       if (msg.type === 'match_created') {
         setMatches((prev) => [msg.data, ...prev]);
       }
+      if (msg.type === 'match_updated') {
+        setMatches((prev) => prev.map((m) => (m.id === msg.data.id ? msg.data : m)));
+      }
     };
 
     wsClient.onMessage(handler);

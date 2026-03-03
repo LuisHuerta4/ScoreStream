@@ -24,11 +24,11 @@ app.use(securityMiddleware());
 app.use('/matches', matchesRouter);
 app.use('/matches/:id/commentary', commentaryRouter);
 
-const { broadcastMatchCreated, broadcastCommentary } = attachWebSocketServer(server);
+const { broadcastMatchCreated, broadcastCommentary, broadcastMatchUpdated } = attachWebSocketServer(server);
 app.locals.broadcastMatchCreated = broadcastMatchCreated;
 app.locals.broadcastCommentary = broadcastCommentary;
 
-startSportSync({ broadcastMatchCreated, broadcastCommentary });
+startSportSync({ broadcastMatchCreated, broadcastCommentary, broadcastMatchUpdated });
 startCleanupJob();
 
 server.listen(PORT, HOST, () => {
