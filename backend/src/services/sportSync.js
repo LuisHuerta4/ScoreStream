@@ -12,6 +12,19 @@ const LEAGUE_IDS = new Set([39, 140, 78, 135, 61, 2, 3]);
 const LIVE_STATUSES = new Set(['1H', 'HT', '2H', 'ET', 'P', 'BT', 'LIVE', 'INT']);
 const FINISH_STATUSES = new Set(['FT', 'AET', 'PEN', 'CANC', 'ABD', 'AWD', 'WO']);
 
+// Map API-Football statistic type labels to normalized camelCase keys
+const STAT_MAP = {
+    'Ball Possession':  'possession',
+    'Shots on Goal':    'shotsOnGoal',
+    'Total Shots':      'totalShots',
+    'Corner Kicks':     'corners',
+    'Fouls':            'fouls',
+    'Yellow Cards':     'yellowCards',
+    'Red Cards':        'redCards',
+    'Offsides':         'offsides',
+    'Passes %':         'passAccuracy',
+};
+
 // Map<externalId_string, { matchId, status, homeScore, awayScore, homeTeam, awayTeam, processedEventKeys: Set<string> }>
 const syncState = new Map();
 
@@ -37,7 +50,6 @@ function mapStatus(shortStatus) {
 }
 
 // Event deduplication key
-
 function buildEventKey(minute, eventType, actor) {
     return `${minute ?? 0}_${eventType ?? ''}_${(actor ?? '').toLowerCase().replace(/\s+/g, '_')}`;
 }
@@ -133,6 +145,37 @@ async function loadStateFromDb(externalId) {
     };
 }
 
+// Fetch match statistics from API and store in DB
+async function processStats(externalId, matchId, broadcastMatchUpdated) {
+    try {
+        const data = await apiFetch(`/fixtures/statistics?fixture=${externalId}`);
+        if (!data || data.length < 2) return;
+
+        function buildTeamStats(teamData) {
+            const out = {};
+            for (const s of teamData.statistics) {
+                const key = STAT_MAP[s.type];
+                if (key !== undefined) out[key] = s.value;
+            }
+            return out;
+        }
+
+        const statsPayload = {
+            home: buildTeamStats(data[0]),
+            away: buildTeamStats(data[1]),
+        };
+
+        const [updated] = await db.update(matches)
+            .set({ stats: statsPayload })
+            .where(eq(matches.id, matchId))
+            .returning();
+
+        if (updated) broadcastMatchUpdated(updated);
+    } catch (err) {
+        console.error(`[SoccerSync] Failed to fetch stats for fixture ${externalId}:`, err.message);
+    }
+}
+
 // Fetch and insert new events for a fixture
 async function processEvents(externalId, matchId, broadcastCommentary) {
     const state = syncState.get(externalId);
@@ -197,6 +240,7 @@ async function processFixture(fixture, broadcasts) {
             if (newStatus === 'live') {
                 await insertCommentary(inserted.id, { eventType: 'status_change', message: 'Kick off!' }, broadcasts.broadcastCommentary);
                 await processEvents(externalId, inserted.id, broadcasts.broadcastCommentary);
+                await processStats(externalId, inserted.id, broadcasts.broadcastMatchUpdated);
             }
         } catch (err) {
             if (err.code !== '23505') {
@@ -240,6 +284,11 @@ async function processFixture(fixture, broadcasts) {
 
     // Fetch new events when something changed (deduplication prevents re-insertion)
     await processEvents(externalId, state.matchId, broadcasts.broadcastCommentary);
+
+    // Fetch updated stats for live/finished matches
+    if (newStatus === 'live' || newStatus === 'finished') {
+        await processStats(externalId, state.matchId, broadcasts.broadcastMatchUpdated);
+    }
 }
 
 // Orchestrator
@@ -256,8 +305,8 @@ async function syncAll(broadcasts) {
 }
 
 // Public export
-export function startSportSync({ broadcastMatchCreated, broadcastCommentary }) {
-    const broadcasts = { broadcastMatchCreated, broadcastCommentary };
+export function startSportSync({ broadcastMatchCreated, broadcastCommentary, broadcastMatchUpdated }) {
+    const broadcasts = { broadcastMatchCreated, broadcastCommentary, broadcastMatchUpdated };
 
     console.log('[SoccerSync] Starting soccer sync service (polls every 20 min)...');
 

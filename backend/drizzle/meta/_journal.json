@@ -29,6 +29,13 @@
       "when": 1772254209818,
       "tag": "0003_yellow_invisible_woman",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1772424510785,
+      "tag": "0004_sudden_ultimates",
+      "breakpoints": true
     }
   ]
 }

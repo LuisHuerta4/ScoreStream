@@ -1,5 +1,22 @@
 export type MatchStatus = 'scheduled' | 'live' | 'finished';
 
+export interface TeamStats {
+  possession: string | null;
+  shotsOnGoal: number | null;
+  totalShots: number | null;
+  corners: number | null;
+  fouls: number | null;
+  yellowCards: number | null;
+  redCards: number | null;
+  offsides: number | null;
+  passAccuracy: string | null;
+}
+
+export interface MatchStats {
+  home: TeamStats;
+  away: TeamStats;
+}
+
 export interface Match {
   id: number;
   sport: string;
@@ -9,6 +26,7 @@ export interface Match {
   status: MatchStatus;
   homeScore: number;
   awayScore: number;
+  stats: MatchStats | null;
   startTime: string | null;
   endTime: string | null;
   createdAt: string;
@@ -35,5 +53,6 @@ export type WsMessage =
   | { type: 'subscribed'; matchId: number }
   | { type: 'unsubscribed'; matchId: number }
   | { type: 'match_created'; data: Match }
+  | { type: 'match_updated'; data: Match }
   | { type: 'commentary'; data: Commentary }
   | { type: 'error'; message: string };

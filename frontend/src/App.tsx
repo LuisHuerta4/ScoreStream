@@ -43,7 +43,7 @@ export default function App() {
     <div className="min-h-screen bg-[#F0EFEB]">
 
       {/* Hero */}
-      <header className="bg-black text-white px-6 sm:px-10 py-14 sm:py-20 border-b-[4px] border-black">
+      <header className="bg-black text-white px-6 sm:px-10 py-14 sm:py-20 border-b-4 border-black">
         <div className="max-w-7xl mx-auto">
 
           <div className="flex items-center gap-2.5 mb-5">
@@ -95,7 +95,7 @@ export default function App() {
               >
                 {tab.label}
                 <span
-                  className={`inline-flex items-center justify-center min-w-[20px] h-5 px-1 border-2 text-[10px] font-black tabular-nums ${
+                  className={`inline-flex items-center justify-center min-w-5 h-5 px-1 border-2 text-[10px] font-black tabular-nums ${
                     activeTab === tab.id
                       ? 'border-white text-white'
                       : 'border-black text-black'
@@ -110,7 +110,7 @@ export default function App() {
       </div>
 
       {/* Main content (grid + panel) */}
-      <div className={`transition-all duration-300 ${commentaryMatch ? 'lg:mr-[440px]' : ''}`}>
+      <div className={`transition-all duration-300 ${commentaryMatch ? 'lg:mr-110' : ''}`}>
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
 
           {/* Loading */}
