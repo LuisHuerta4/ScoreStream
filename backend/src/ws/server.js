@@ -3,6 +3,16 @@ import { wsArcjet } from '../arcjet.js';
 
 const matchSubscribers = new Map(); //Track which sockets are subscribed to which matches
 
+function getClientIp(req) {
+    const forwardedFor = req.headers['x-forwarded-for'];
+
+    if (typeof forwardedFor === 'string' && forwardedFor.trim()) {
+        return forwardedFor.split(',')[0].trim();
+    }
+
+    return req.socket.remoteAddress;
+}
+
 function subscribe(matchId, socket) {
     if (!matchSubscribers.has(matchId)) {
         matchSubscribers.set(matchId, new Set());
@@ -90,7 +100,11 @@ export function attachWebSocketServer(server) {
             return;
         }
 
-        const clientIp = req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.socket.remoteAddress;
+        const clientIp = getClientIp(req);
+
+        if (clientIp) {
+            req.ip = clientIp;
+        }
 
         if (wsArcjet && clientIp) {
             try {
