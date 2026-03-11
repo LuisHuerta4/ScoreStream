@@ -27,7 +27,7 @@ export const wsArcjet = arcjetKey ?
 
 export function securityMiddleware() {
     return async (req, res, next) => {
-        if (!httpArcjet) return next();
+        if (!httpArcjet || !req.ip) return next();
 
         try {
             const decision = await httpArcjet.protect(req);

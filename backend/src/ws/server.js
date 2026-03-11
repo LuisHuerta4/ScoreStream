@@ -90,7 +90,9 @@ export function attachWebSocketServer(server) {
             return;
         }
 
-        if (wsArcjet) {
+        const clientIp = req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.socket.remoteAddress;
+
+        if (wsArcjet && clientIp) {
             try {
                 const decision = await wsArcjet.protect(req);
 
