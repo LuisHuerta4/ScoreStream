@@ -2,7 +2,7 @@ services:
   - type: web
     name: scorestream
     runtime: node
-    buildCommand: cd frontend && NODE_ENV=development npm install && npm run build && cd ../backend && npm install
+    buildCommand: npm install && cd frontend && NODE_ENV=development npm install && npm run build
     startCommand: node backend/src/index.js
     envVars:
       - key: NODE_ENV
