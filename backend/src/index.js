@@ -20,6 +20,7 @@ const app = express();
 const server = http.createServer(app);
 
 app.use(express.json());
+app.set('trust proxy', true);
 app.use(securityMiddleware());
 
 app.use('/api/matches', matchesRouter);
