@@ -25,12 +25,20 @@ export const wsArcjet = arcjetKey ?
         ]
     }) : null;
 
+export function getRequestIp(req) {
+    const ip = req.ip
+        || (typeof req.headers['x-forwarded-for'] === 'string' && req.headers['x-forwarded-for'].split(',')[0].trim())
+        || req.socket?.remoteAddress;
+    return ip && ip.trim() ? ip.trim() : null;
+}
+
 export function securityMiddleware() {
     return async (req, res, next) => {
-        if (!httpArcjet || !req.ip) return next();
+        const ip = getRequestIp(req);
+        if (!httpArcjet || !ip) return next();
 
         try {
-            const decision = await httpArcjet.protect(req);
+            const decision = await httpArcjet.protect(req, { ip });
 
             if (decision.isDenied()) {
                 if (decision.reason.isRateLimit()) {

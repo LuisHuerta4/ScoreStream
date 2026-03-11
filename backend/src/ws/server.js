@@ -1,17 +1,7 @@
 import { WebSocket, WebSocketServer } from 'ws';
-import { wsArcjet } from '../arcjet.js';
+import { wsArcjet, getRequestIp } from '../arcjet.js';
 
 const matchSubscribers = new Map(); //Track which sockets are subscribed to which matches
-
-function getClientIp(req) {
-    const forwardedFor = req.headers['x-forwarded-for'];
-
-    if (typeof forwardedFor === 'string' && forwardedFor.trim()) {
-        return forwardedFor.split(',')[0].trim();
-    }
-
-    return req.socket.remoteAddress;
-}
 
 function subscribe(matchId, socket) {
     if (!matchSubscribers.has(matchId)) {
@@ -100,7 +90,7 @@ export function attachWebSocketServer(server) {
             return;
         }
 
-        const clientIp = getClientIp(req);
+        const clientIp = getRequestIp(req);
 
         if (clientIp) {
             req.ip = clientIp;
@@ -108,7 +98,7 @@ export function attachWebSocketServer(server) {
 
         if (wsArcjet && clientIp) {
             try {
-                const decision = await wsArcjet.protect(req);
+                const decision = await wsArcjet.protect(req, { ip: clientIp });
 
                 if (decision.isDenied()) {
                     if (decision.reason.isRateLimit()) {
