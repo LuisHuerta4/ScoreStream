@@ -33,7 +33,7 @@ startSportSync({ broadcastMatchCreated, broadcastCommentary, broadcastMatchUpdat
 startCleanupJob();
 
 app.use(express.static(FRONTEND_DIST));
-app.get('*', (_req, res) => {
+app.get('/{*path}', (_req, res) => {
     res.sendFile(join(FRONTEND_DIST, 'index.html'));
 });
 
