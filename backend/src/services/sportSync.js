@@ -1,6 +1,6 @@
 import { db } from '../db/db.js';
 import { matches, commentary } from '../db/schema.js';
-import { eq } from 'drizzle-orm';
+import { eq, and, lte, or } from 'drizzle-orm';
 
 const BASE_URL = 'https://v3.football.api-sports.io';
 const POLL_INTERVAL_MS = 20 * 60 * 1000; // 20 minutes — keeps usage ~92 requests/day on free tier
@@ -301,6 +301,43 @@ async function syncAll(broadcasts) {
         await processFixture(fixture, broadcasts).catch((err) =>
             console.error(`[SoccerSync] Unhandled error for fixture ${fixture.fixture.id}:`, err.message)
         );
+    }
+
+    await correctStaleStatuses(broadcasts.broadcastMatchUpdated);
+}
+
+async function correctStaleStatuses(broadcastMatchUpdated) {
+    const now = new Date();
+
+    try {
+        // scheduled/live matches whose endTime has passed → finished
+        const finishedRows = await db.update(matches)
+            .set({ status: 'finished' })
+            .where(and(
+                or(eq(matches.status, 'scheduled'), eq(matches.status, 'live')),
+                lte(matches.endTime, now)
+            ))
+            .returning();
+
+        // scheduled matches whose startTime has passed but endTime hasn't → live
+        const liveRows = await db.update(matches)
+            .set({ status: 'live' })
+            .where(and(
+                eq(matches.status, 'scheduled'),
+                lte(matches.startTime, now)
+            ))
+            .returning();
+
+        for (const row of [...finishedRows, ...liveRows]) {
+            broadcastMatchUpdated(row);
+        }
+
+        const total = finishedRows.length + liveRows.length;
+        if (total > 0) {
+            console.log(`[SoccerSync] Corrected ${total} stale match statuses`);
+        }
+    } catch (err) {
+        console.error('[SoccerSync] Failed to correct stale statuses:', err.message);
     }
 }
 
