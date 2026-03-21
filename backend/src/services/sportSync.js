@@ -37,6 +37,9 @@ async function apiFetch(path) {
     const res = await fetch(`${BASE_URL}${path}`, {
         headers: { 'x-apisports-key': key },
     });
+    if (res.status === 429) {
+        throw new Error('API-Football daily request limit reached');
+    }
     if (!res.ok) throw new Error(`HTTP ${res.status} for ${BASE_URL}${path}`);
     const body = await res.json();
     return body.response ?? [];
