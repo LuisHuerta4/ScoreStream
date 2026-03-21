@@ -13,7 +13,7 @@ export function MatchDetail({ match }: Props) {
   return (
     <div className="flex flex-col flex-1 overflow-hidden">
       <ScoreBoard match={match} />
-      <CommentaryFeed commentary={commentary} loading={loading} error={error} />
+      <CommentaryFeed commentary={commentary} loading={loading} error={error} matchStatus={match.status} />
     </div>
   );
 }
